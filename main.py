@@ -3,25 +3,47 @@ import requests
 
 app = Flask(__name__)
 
-# DEINE echten Zugangsdaten:
 API_KEY = "so8XfqEUCWHeKrf9"
 API_PASSWORD = "Trading123!"
 ACCOUNT_ID = "24396694"
-EPIC = "BTC/USD"  # <--- jetzt mit Slash!
+EPIC = "BTC/USD"
 
 BASE_URL = "https://api-capital.backend-capital.com"
 
+def capital_login():
+    """Login bei Capital.com – liefert Session-Token zurück."""
+    url = f"{BASE_URL}/api/v1/session"
+    payload = {
+        "identifier": API_KEY,
+        "password": API_PASSWORD
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "X-CAP-API-KEY": API_KEY
+    }
+    resp = requests.post(url, json=payload, headers=headers)
+    if resp.status_code == 200 and 'CST' in resp.headers and 'X-SECURITY-TOKEN' in resp.headers:
+        cst = resp.headers['CST']
+        sec = resp.headers['X-SECURITY-TOKEN']
+        return cst, sec
+    else:
+        print("Login-Fehler:", resp.text)
+        raise Exception("Login fehlgeschlagen: " + resp.text)
+
 def place_limit_order(direction, price, size=0.01):
+    cst, sec = capital_login()
     headers = {
         "Content-Type": "application/json",
         "X-CAP-API-KEY": API_KEY,
+        "CST": cst,
+        "X-SECURITY-TOKEN": sec
     }
     order = {
         "epic": EPIC,
-        "direction": direction.upper(),   # "BUY" oder "SELL"
-        "size": size,                     # Positionsgröße (Lot)
+        "direction": direction.upper(),
+        "size": size,
         "orderType": "LIMIT",
-        "level": float(price),            # Limit-Preis
+        "level": float(price),
         "currency": "USD"
     }
     print(f"Sende Order an Capital.com: {order}")
@@ -40,7 +62,7 @@ def webhook():
     try:
         side = data.get("side")
         price = float(data.get("price"))
-        size = float(data.get("size", 0.01))  # Optional im TV-Alert (sonst 0.01)
+        size = float(data.get("size", 0.01))
         response = place_limit_order(side, price, size)
         return jsonify(response)
     except Exception as e:
@@ -49,5 +71,4 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
 
